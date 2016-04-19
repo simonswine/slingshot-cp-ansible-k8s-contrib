@@ -44,7 +44,7 @@ class AnsibleConfigProvider(object):
             self.my_log = l
         return self.my_log
 
-    def perpare(self):
+    def prepare(self):
         self.configure_ssh()
         self.configure_ansible()
 
@@ -58,7 +58,8 @@ class AnsibleConfigProvider(object):
 
     def configure_ssh(self):
         try:
-            key = self.parameters['general']['authentication']['ssh_key']['key']
+            ssh = self.parameters['general']['authentication']['ssh']
+            key = ssh['privateKey']
 
             if os.path.exists(self.ssh_key_file_path):
                 self.log.warn(
@@ -81,9 +82,48 @@ class AnsibleConfigProvider(object):
         self.configure_ansible_params()
 
     def configure_ansible_params(self):
-        conf = self.parameters['general']['cluster']
+        inputConf = self.parameters['general']['cluster']['kubernetes']
+        outputConf = {
+            'source_type': 'packageManager',
+            'cluster_name':
+            inputConf['dns']['domainName'],
+            'kube_master_api_port':
+            inputConf['masterApiPort'],
+            'kube_service_addresses':
+            inputConf['serviceNetwork'],
+            'networking':
+            inputConf['networking'],
+            'flannel_subnet':
+            inputConf['flannel']['subnet'],
+            'flannel_prefix':
+            inputConf['flannel']['prefix'],
+            'flannel_host_prefix':
+            inputConf['flannel']['hostPrefix'],
+            'cluster_logging':
+            inputConf['addons']['clusterLogging'],
+            'cluster_monitoring':
+            inputConf['addons']['clusterMonitoring'],
+            'kube-ui':
+            inputConf['addons']['kubeUI'],
+            'kube-dash':
+            inputConf['addons']['kubeDash'],
+        }
+
+        if inputConf['dns']['replicas'] > 0:
+            outputConf['dns_setup'] = True
+            outputConf['dns_replicas'] = \
+                inputConf['dns']['replicas']
+        else:
+            outputConf['dns_setup'] = False
+
+        if 'interface' in inputConf:
+            interface = inputConf['interface']
+            outputConf['flannel_opts'] = '--iface="%s"' % interface
+            outputConf['apiserver_extra_args'] = \
+                '--advertise-address={{ ansible_%s.ipv4.address }}' % interface
+
         path = self.ansible_vars_all_file_path
-        content = yaml.dump(conf, default_flow_style=False)
+        content = yaml.dump(outputConf, default_flow_style=False)
         self.write_to_file(path, content)
         self.log.info(
             "successfully wrote group_vars key to '%s'" % path
@@ -116,15 +156,16 @@ masters
 [coreos:children]
 kubernetes
 """ % (
-            self.ansible_hosts_line('masters'),
-            self.ansible_hosts_line('workers'),
+            self.ansible_hosts('masters'),
+            self.ansible_hosts('workers'),
         )
         return content
 
-    def ansible_hosts_line(self, role):
+    def ansible_hosts(self, role):
         output = ''
-        for host in self.parameters['inventory'][role]:
-            output += host['ip']
+        for host in self.parameters['inventory']:
+            if role in host['roles']:
+                output += "%(ip)s \n" % host
 
         return output
 
@@ -148,9 +189,12 @@ kubernetes
   version: 1
 commands:
   apply:
+    execs:
+      -
+        - apply
     type: docker
-    resultFile: output.yaml
-    persistPaths: []""")
+    parameterFile: %s
+    persistPaths: []""" % os.path.basename(self.parameters_file_path))
 
     def command(self, argv):
         cmd = argv[1]
