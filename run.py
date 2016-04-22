@@ -165,7 +165,7 @@ kubernetes
         output = ''
         for host in self.parameters['inventory']:
             if role in host['roles']:
-                output += "%(ip)s \n" % host
+                output += "%(publicIP)s \n" % host
 
         return output
 
