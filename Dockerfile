@@ -19,7 +19,7 @@ RUN chown -cR ansible:ansible /ansible
 USER ansible
 
 # download kubespray's code
-ENV K8S_CONTRIB_VERSION d3a33c17e5666267a377e581c26730e49fbf4507
+ENV K8S_CONTRIB_VERSION 41772990cb22173c8a69d161966b1a87dec2eafb
 RUN curl -L https://github.com/kubernetes/contrib/archive/${K8S_CONTRIB_VERSION}.tar.gz | \
     tar xzvf - contrib-${K8S_CONTRIB_VERSION}/ansible/ --strip-components=2
 
